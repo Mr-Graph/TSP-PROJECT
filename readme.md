@@ -44,13 +44,13 @@ The **Traveling Salesman Problem (TSP)** is a classic algorithmic problem focuse
 
 ---
 
-## 📷 Screenshots
+## 📷 Screenshot
 
-
+<img width="1105" alt="Screenshot 2025-04-18 at 9 10 03 PM" src="https://github.com/user-attachments/assets/e68a309e-840f-431c-b0cb-e18aa60ceb88" />
+<img width="1217" alt="Screenshot 2025-04-18 at 9 11 17 PM" src="https://github.com/user-attachments/assets/79abb9b8-c357-488d-a32f-5ffd06173fea" />
+<img width="642" alt="Screenshot 2025-04-18 at 9 11 53 PM" src="https://github.com/user-attachments/assets/e2186223-5d8e-4af5-b1c7-efb36be31ef1" />
 
 ---
 
-## 📂 Project Structure
--
 
 
