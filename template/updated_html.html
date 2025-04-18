@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TSP Path Result</title>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
+    <script type="text/javascript" src="updated_js.js"></script> <!-- Include tsp.js -->
+    <style>
+        /* General Styles */
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: #ecf0f1;
+            background-image: url('/static/mapearth.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        h1 {
+            margin-top: 20px;
+            font-size: 48px;
+            font-weight: 700;
+            color: #ffffff;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            opacity: 0;
+            animation: fadeInUp 1.5s forwards;
+        }
+
+        @keyframes fadeInUp {
+            0% {
+                opacity: 0;
+                transform: translateY(40px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        #graph-container {
+            width: 90%;
+            max-width: 1200px;
+            height: 650px;
+            margin: 40px 0;
+            background-color: #ffffff;
+            border-radius: 16px;
+            border: 2px solid #dfe6e9;
+            box-shadow: 0px 12px 24px rgba(0, 0, 0, 0.1);
+            opacity: 0;
+            transform: translateY(50px);
+            animation: slideIn 1s forwards;
+        }
+
+        @keyframes slideIn {
+            0% {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .btn {
+            padding: 15px 30px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            font-size: 18px;
+            cursor: pointer;
+            box-shadow: 0px 6px 12px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.3s, transform 0.3s, box-shadow 0.3s;
+            margin-top: 20px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 1.5s 1.5s forwards;
+        }
+
+        .btn:hover {
+            background-color: #2980b9;
+            transform: scale(1.1);
+            box-shadow: 0px 12px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:focus {
+            outline: none;
+        }
+
+        .route-info {
+            padding: 15px;
+            margin: 20px 0;
+            background-color: #ffffff;
+            border-radius: 16px;
+            border: 2px solid #dfe6e9;
+            box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.08);
+            width: 90%;
+            max-width: 1200px;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 32px;
+            }
+
+            #graph-container {
+                width: 100%;
+                height: 500px;
+            }
+
+            .btn {
+                font-size: 14px;
+                padding: 12px 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Traveling Salesman Path Visualization</h1>
+    <div id="graph-container"></div>
+    <div id="route-info" class="route-info"></div>
+    <button class="btn" onclick="loadGraphData()">Reload TSP Path</button>
+
+    <!-- Button to go back to main.html -->
+    <button class="btn" onclick="window.location.href='main.html';">Go to Main Page</button>
+
+    <script>
+        async function loadGraphData() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const startCityId = urlParams.get('startCity');
+            
+            // Parse deliveryPoints safely and ensure they're strings
+            let deliveryPointIds = [];
+            try {
+                const deliveryPointsParam = urlParams.get('deliveryPoints');
+                deliveryPointIds = JSON.parse(deliveryPointsParam).map(String);
+                console.log("Delivery Points:", deliveryPointIds);
+            } catch (e) {
+                console.error("Error parsing deliveryPoints:", e);
+            }
+
+            // Fetch graph data (edges from the file)
+            const response = await fetch('/static/graph.txt');
+            const text = await response.text();
+            const lines = text.split('\n').filter(Boolean);
+
+            let distanceMatrix = {};
+            let allCities = new Set();
+
+            // Parse the graph.txt file (city1 city2 distance)
+            lines.forEach(line => {
+                const [cityA, cityB, dist] = line.split(' ');
+                const distance = parseFloat(dist);
+                if (!distanceMatrix[cityA]) distanceMatrix[cityA] = {};
+                if (!distanceMatrix[cityB]) distanceMatrix[cityB] = {};
+                distanceMatrix[cityA][cityB] = distance;
+                distanceMatrix[cityB][cityA] = distance;
+                distanceMatrix[cityA][cityA] = 0;
+                distanceMatrix[cityB][cityB] = 0;
+                allCities.add(cityA);
+                allCities.add(cityB);
+            });
+
+            // Map city IDs back to city names (based on city_names.txt)
+            const cityNames = await fetchCityNames();
+            const startCity = cityNames[startCityId];
+            const deliveryPoints = deliveryPointIds.map(id => cityNames[id]);
+
+            // Calculate TSP path with Floyd-Warshall algorithm
+            const { tspPath, fullPath ,tpath} = calculateTSPWithFloydWarshall(startCityId, deliveryPointIds, distanceMatrix);
+            
+            // Prepare nodes and edges for visualization
+            const vertices = [];
+            Array.from(allCities).forEach(cityId => {
+                // Check if city is start city or delivery point
+                const isStart = cityId === startCityId;
+                const isDelivery = deliveryPointIds.includes(cityId.toString());
+                
+                let color, size;
+                
+                if (isStart) {
+                    color = '#1abc9c'; // Green for start city
+                    size = 20;
+                } else if (isDelivery) {
+                    color = '#e74c3c'; // Red for delivery points
+                    size = 18;
+                } else {
+                    color = '#3498db'; // Blue for normal cities
+                    size = 12;
+                }
+                
+                vertices.push({
+                    id: cityId,
+                    label: cityNames[cityId] || cityId,
+                    color: color,
+                    size: size,
+                    font: { 
+                        color: '#000000',
+                        size: isStart || isDelivery ? 16 : 14,
+                        bold: isStart || isDelivery,
+                        background: 'rgba(255, 255, 255, 0.8)',
+                        strokeWidth: 4,
+                        strokeColor: 'rgba(255, 255, 255, 0.8)'
+                    },
+                    margin: 12
+                });
+            });
+
+            const edges = [];
+            // Increased scale factor to increase distance between nodes
+            const scaleFactor = 2.0;  // Significantly increased to improve spacing
+
+            // Add edges for all roads with proportional lengths
+            for (let cityA of allCities) {
+                for (let cityB of Object.keys(distanceMatrix[cityA])) {
+                    const distance = distanceMatrix[cityA][cityB];
+                    if (cityA !== cityB && cityA < cityB) { // Only add each edge once
+                        edges.push({
+                            from: cityA,
+                            to: cityB,
+                            label: `${distance} km`,
+                            font: { 
+                                align: 'middle', 
+                                size: 10,
+                                background: 'rgba(255, 255, 255, 0.7)',
+                                color: '#555555'
+                            },
+                            color: { color: '#aaaaaa' }, // Light gray for regular edges
+                            width: 1,
+                            length: distance * scaleFactor
+                        });
+                    }
+                }
+            }
+
+            // Highlight the TSP path with increased width and better visuals
+            for (let i = 0; i < fullPath.length - 1; i++) {
+                const fromCity = fullPath[i];
+                const toCity = fullPath[i + 1];
+                const distance = distanceMatrix[fromCity][toCity];
+
+                if (distance !== undefined) {
+                    edges.push({
+                        from: fromCity,
+                        to: toCity,
+                        label: `${distance} km`,
+                        font: { 
+                            align: 'middle', 
+                            size: 12, 
+                            color: '#006600',
+                            background: 'rgba(255, 255, 255, 0.9)',
+                            strokeWidth: 3,
+                            strokeColor: 'rgba(255, 255, 255, 0.9)'
+                        },
+                        color: { color: '#2ecc71' }, // Green for TSP path
+                        width: 3,
+                        arrows: { to: { enabled: true, scaleFactor: 0.7 } },
+                        smooth: { enabled: true, type: 'curvedCW', roundness: 0.2 },
+                        length: distance * scaleFactor
+                    });
+                }
+            }
+
+            // Create the network visualization
+            const container = document.getElementById('graph-container');
+            const data = { nodes: vertices, edges: edges };
+            const options = {
+                nodes: {
+                    shape: 'dot',
+                    borderWidth: 2,
+                    shadow: true,
+                    margin: 12,
+                    font: {
+                        size: 14,
+                        face: 'Arial',
+                        vadjust: -10,  // Move label above the node
+                    }
+                },
+                edges: { 
+                    smooth: { type: 'continuous', roundness: 0.2 },
+                    shadow: true
+                },
+                physics: {
+                    enabled: true,
+                    barnesHut: {
+                        gravitationalConstant: -20000,  // Greatly increased repulsion
+                        centralGravity: 0.1,           // Reduced central gravity
+                        springLength: 350,             // Increased spring length
+                        springConstant: 0.02,          // Lower spring constant
+                        damping: 0.09
+                    },
+                    stabilization: {
+                        iterations: 2500,
+                        fit: true
+                    }
+                },
+                layout: {
+                    improvedLayout: true,
+                    randomSeed: 2
+                },
+                interaction: {
+                    hover: true,
+                    zoomView: true,
+                    dragView: true,
+                    navigationButtons: true,
+                    keyboard: true
+                }
+            };
+
+            const network = new vis.Network(container, data, options);
+            
+            // Add event to ensure layouts are stable
+            network.on("stabilizationIterationsDone", function() {
+                console.log("Stabilization complete");
+                network.setOptions({
+                    physics: {
+                        enabled: false  // Turn off physics after stabilization
+                    }
+                });
+            });
+            
+            // Display route information
+            displayRouteInfo(startCityId, deliveryPointIds, tspPath, cityNames, distanceMatrix);
+            
+        }
+
+        // Display route summary information
+        function displayRouteInfo(startCityId, deliveryPointIds, tspPath, cityNames, distanceMatrix) {
+            let totalDistance = 0;
+            
+            // Calculate total distance
+            for (let i = 0; i < tspPath.length; i++) {
+    const from = tspPath[i];
+    const to = tspPath[(i + 1) % tspPath.length]; // loop back to start
+    const dist = distanceMatrix[from]?.[to];
+    console.log(`From ${from} to ${to} => Distance: ${dist}`);
+    
+    if (dist !== undefined) {
+        totalDistance += dist;
+    } else {
+        console.warn(`Distance not defined between ${from} and ${to}`);
+    }
+}
+            console.log(totalDistance)
+            const infoDiv = document.getElementById('route-info');
+            
+            let deliveryPointsStr = deliveryPointIds.map(id => `${cityNames[id] || 'Unknown'} (ID: ${id})`).join(', ');
+            
+            infoDiv.innerHTML = `
+                <h3>Delivery Route Information</h3>
+                <p><strong>Starting City:</strong> ${cityNames[startCityId] || startCityId} (ID: ${startCityId})</p>
+                <p><strong>Delivery Points:</strong> ${deliveryPointsStr}</p>
+                <p><strong>Total Distance:</strong> ${totalDistance.toFixed(2)} km</p>
+                <p><strong>Route Order:</strong> ${tspPath.map(id => `${cityNames[id] || id} (${id})`).join(' → ')} → ${cityNames[tspPath[0]] || tspPath[0]} (${tspPath[0]})</p>
+            `;
+        }
+
+        async function fetchCityNames() {
+            const response = await fetch('/static/city_names.txt');
+            const text = await response.text();
+            const cityNames = {};
+            text.split('\n').forEach(line => {
+                const [id, name] = line.split(/\s(.+)/);
+                if (id && name) {
+                    cityNames[id] = name.trim();
+                }
+            });
+            return cityNames;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadGraphData();
+        });
+    </script>
+</body>
+</html>

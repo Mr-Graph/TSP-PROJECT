@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>City Selector</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-image: url('/static/mapearth.jpg');
+            background-size: cover;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh; /* Allows the body to expand beyond the viewport */
+            background-position: center;
+            overflow: auto; /* Enable scrolling */
+        }
+        .container {
+            width: 80%;
+            max-width: 600px;
+            padding: 30px;
+            background: linear-gradient(135deg, #74ebd5 0%, #acb6e5 100%);
+            border-radius: 12px;
+            box-shadow: 0 4px 25px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            backdrop-filter: blur(10px);
+            overflow-y: auto; /* Enable vertical scrolling if needed */
+            max-height: 90vh; /* Limit container height */
+        }
+        h1 {
+            color: #2f4f4f;
+            font-size: 2.8em;
+            font-weight: bold;
+            margin-bottom: 25px;
+            text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        select, input[type="text"], button {
+            width: 100%;
+            padding: 14px;
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            background-color: rgba(255, 255, 255, 0.8);
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+        select:focus, input[type="text"]:focus, button:hover {
+            border-color: #28a745;
+            outline: none;
+        }
+        button {
+            background-color: #28a745;
+            color: #fff;
+            cursor: pointer;
+            font-size: 1.2em;
+            border: none;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+            transition: background-color 0.3s ease, transform 0.2s;
+        }
+        button:hover {
+            background-color: #218838;
+            transform: scale(1.05);
+        }
+        .checkbox-search-container {
+            margin-bottom: 20px;
+            text-align: left;
+            position: relative;
+        }
+        #checkboxSearch {
+            padding-left: 30px;
+        }
+        #checkboxSearch::before {
+            content: "🔍";
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.2em;
+        }
+        .checkbox-group label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+        }
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .checkbox-group label:hover {
+            color: #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Select Delivery Points</h1>
+        <form id="cityForm">
+            <select id="startCity" required>
+                <option value="" disabled selected>Select a starting city</option>
+            </select>
+
+            <div class="checkbox-search-container">
+                <input type="text" id="checkboxSearch" placeholder="Search delivery points..." onkeyup="filterCheckboxes()">
+                <div class="checkbox-group" id="checkboxList"></div>
+            </div>
+
+            <button type="button" onclick="redirectToResultPage()">Find TSP Path</button>
+        </form>
+    </div>
+
+    <script>
+        async function loadCityNames() {
+            try {
+                const response = await fetch('/static/city_names.txt');
+                const text = await response.text();
+
+                const cities = {};
+                const lines = text.split('\n').filter(line => line.trim() !== "");
+                lines.forEach(line => {
+                    const [id, name] = line.split(/\s(.+)/);
+                    if (id && name) {
+                        cities[name.trim()] = id;
+                    }
+                });
+
+                const startCitySelect = document.getElementById('startCity');
+                const checkboxList = document.getElementById('checkboxList');
+
+                // Populate the start city dropdown and delivery point checkboxes
+                Object.keys(cities).forEach((cityName) => {
+                    const cityId = cities[cityName];
+                    const option = document.createElement('option');
+                    option.value = cityId;
+                    option.textContent = cityName;
+                    startCitySelect.appendChild(option);
+
+                    const label = document.createElement('label');
+                    label.innerHTML = `<input type="checkbox" name="delivery_points" value="${cityId}"> ${cityName}`;
+                    checkboxList.appendChild(label);
+                });
+            } catch (error) {
+                console.error('Error loading city names:', error);
+            }
+        }
+
+        function filterCheckboxes() {
+            const searchInput = document.getElementById('checkboxSearch').value.toLowerCase();
+            const checkboxes = document.getElementById('checkboxList').getElementsByTagName('label');
+
+            for (let label of checkboxes) {
+                const text = label.textContent.toLowerCase();
+                label.style.display = text.includes(searchInput) ? "block" : "none";
+            }
+        }
+
+        function redirectToResultPage() {
+            const startCity = document.getElementById('startCity').value;
+            const deliveryPoints = Array.from(document.querySelectorAll('input[name="delivery_points"]:checked')).map(cb => cb.value);
+
+            if (!startCity || deliveryPoints.length === 0) {
+                alert('Please select a starting city and at least one delivery point.');
+                return;
+            }
+
+            const queryParams = new URLSearchParams({
+                startCity: startCity,
+                deliveryPoints: JSON.stringify(deliveryPoints)
+            });
+
+            window.location.href = `updated_html.html?${queryParams.toString()}`;
+        }
+
+        document.addEventListener('DOMContentLoaded', loadCityNames);
+    </script>
+</body>
+</html>
